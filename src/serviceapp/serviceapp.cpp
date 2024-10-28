@@ -1113,6 +1113,19 @@ RESULT eServiceApp::getSubtitleList(std::vector<struct SubtitleTrack> &subtitlel
 			}
 		}
 	}
+	else if (listDir("/tmp", &files, &directories) == 0)
+	{
+	std::vector<std::string>::const_iterator it;
+	for (it = files.begin(); it != files.end(); it++)
+		{
+			splitExtension(*it, basename, extension);
+			std::string path = "/tmp/" + *it;
+			if (extension == ".srt" && subtitle_path != path)
+			{
+				addExternalTrack(subtitlelist, pid++, basename, path);
+			}
+		}
+	}
 	eDebug("eServiceApp::getSubtitleList - found external tracks (%d)", pid - embedded_track_num);
 	return 0;
 }
