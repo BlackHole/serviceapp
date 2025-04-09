@@ -11,6 +11,7 @@ from Components.Console import Console
 from Components.config import config, ConfigSubsection, ConfigSelection, ConfigBoolean, getConfigListEntry, ConfigSubDict, ConfigInteger, ConfigNothing
 from Components.Label import Label
 from Components.Sources.StaticText import StaticText
+from Components.SystemInfo import SystemInfo
 from Plugins.Plugin import PluginDescriptor
 from Screens.InfoBar import InfoBar, MoviePlayer
 from Screens.MessageBox import MessageBox
@@ -234,10 +235,13 @@ class ServiceAppSettings(ConfigListScreen, Screen):
         return config_list
 
     def serviceapp_passthrough_options(self, config_list):
-        config_list.append(getConfigListEntry(_("Enable passthrough fix"), config_serviceapp.passthrough_fix_enable, _("Enables passthrough fix for Vu+ Ultimo4K / Duo4KSE.")))
-        if config_serviceapp.passthrough_fix_enable.value:
-            config_list.append(getConfigListEntry(_("Passthrough fix delay"),
-                config_serviceapp.passthrough_fix_delay, _("Select the delay that will be used for passthrough fix.")))
+        if SystemInfo["Vu_EAC3_fix"] and config.av.downmix_ac3.value == "passthrough":
+            config_serviceapp.passthrough_fix_enable
+            if config_serviceapp.passthrough_fix_enable.value:
+                config_list.append(getConfigListEntry(_("AC3+ Passthrough fix delay"),
+                    config_serviceapp.passthrough_fix_delay, _("Select the delay that will be used for AC3+ Passthrough fix.")))
+        else:
+            return
 
     def player_options(self, player_type, service_type):
         config_list = []
@@ -423,8 +427,8 @@ def Plugins(**kwargs):
     return [
             PluginDescriptor(name=_("ServiceApp"), description=_("setup player framework"),
                 where=PluginDescriptor.WHERE_MENU, needsRestart=False, fnc=menu),
-            PluginDescriptor(name=_("ServiceApp"), description=_("Play with ServiceExtEplayer3"),
+            PluginDescriptor(name=_("ServiceApp"), description=_("Play with ExtePlayer3"),
                 where=PluginDescriptor.WHERE_MOVIELIST, needsRestart=False, fnc=play_exteplayer3),
-            PluginDescriptor(name=_("ServiceApp"), description=_("Play with ServiceGstPlayer"),
+            PluginDescriptor(name=_("ServiceApp"), description=_("Play with GstPlayer"),
                 where=PluginDescriptor.WHERE_MOVIELIST, needsRestart=False, fnc=play_gstplayer)
             ]
