@@ -236,12 +236,10 @@ class ServiceAppSettings(ConfigListScreen, Screen):
 
     def serviceapp_passthrough_options(self, config_list):
         if SystemInfo["Vu_EAC3_fix"] and config.av.downmix_ac3.value == "passthrough":
-            config_serviceapp.passthrough_fix_enable
+            config_list.append(getConfigListEntry(_("Enable AC3+ passthrough fix"), config_serviceapp.passthrough_fix_enable, _("Enables AC3+ passthrough fix for Vu+ Ultimo4K / Duo4KSE.")))
             if config_serviceapp.passthrough_fix_enable.value:
-                config_list.append(getConfigListEntry(_("AC3+ Passthrough fix delay"),
-                    config_serviceapp.passthrough_fix_delay, _("Select the delay that will be used for AC3+ Passthrough fix.")))
-        else:
-            return
+                config_list.append(getConfigListEntry(_("AC3+ Passthrough fix delay"), config_serviceapp.passthrough_fix_delay, _("Select the delay that will be used for AC3+ Passthrough fix.")))
+
 
     def player_options(self, player_type, service_type):
         config_list = []
