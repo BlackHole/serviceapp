@@ -47,7 +47,11 @@ config_serviceapp.servicemp3.player = ConfigSelection(default="gstplayer", choic
 if SystemInfo["Vu_EAC3_fix"] and config.av.downmix_ac3.value == "passthrough":
 	config_serviceapp.passthrough_fix_enable = ConfigYesNo(default=True)
 	delay_choices = [(i, ngettext("%d ms", "%d ms", i) % i) for i in list(range(0, 3100, 100))]  # noqa: F821
-	config_serviceapp.passthrough_fix_delay = ConfigSelection(choices=delay_choices, default=1200)
+	config_serviceapp.passthrough_fix_delay = ConfigSelection(choices=delay_choices, default=300)
+if SystemInfo["Vu_EAC3_fix"] and config.av.downmix_aac.value == "passthrough":
+	config_serviceapp.passthrough_fix2_enable = ConfigYesNo(default=True)
+	delay_choices = [(i, ngettext("%d ms", "%d ms", i) % i) for i in list(range(0, 3100, 100))]  # noqa: F821
+	config_serviceapp.passthrough_fix2_delay = ConfigSelection(choices=delay_choices, default=300)
 
 config_serviceapp.options = ConfigSubDict()
 config_serviceapp.options["servicemp3"] = ConfigSubsection()
