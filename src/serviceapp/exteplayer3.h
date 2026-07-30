@@ -41,6 +41,7 @@ struct ExtEplayer3Options : public IOption
 class ExtEplayer3: public PlayerApp, public BasePlayer
 {
 	ExtEplayer3Options mPlayerOptions;
+	eMainloop *m_context = NULL; //context
 	void handleProcessStopped(int retval);
 	void handleJsonOutput(cJSON* json);
 	std::vector<std::string> buildCommand();

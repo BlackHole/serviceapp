@@ -225,6 +225,7 @@ std::vector<std::string> ExtEplayer3::buildCommand()
 }
 int ExtEplayer3::start(eMainloop *context)
 {
+	m_context = context; //save context
 	return processStart(context);
 }
 
@@ -238,11 +239,31 @@ int ExtEplayer3::sendUpdatePosition(){ return processSend(std::string("j\n"));}
 int ExtEplayer3::sendUpdateAudioTracksList(){ return processSend(std::string("al\n"));}
 int ExtEplayer3::sendUpdateAudioTrackCurrent(){ return processSend(std::string("ac\n"));}
 
-int ExtEplayer3::sendAudioSelectTrack(int trackId)
+/*int ExtEplayer3::sendAudioSelectTrack(int trackId)
 {
 	std::stringstream sstm;
 	sstm << "a" << trackId << std::endl;
 	return processSend(sstm.str());
+}*/
+int ExtEplayer3::sendAudioSelectTrack(int trackId)
+{
+    processKill();
+
+    SettingMap &settings = mPlayerOptions.GetSettingMap();
+    if (settings.find(EXT3_PLAYBACK_AUDIO_TRACK_ID) != settings.end()) {
+        settings[EXT3_PLAYBACK_AUDIO_TRACK_ID].setValue(trackId);
+    } else {
+        SettingEntry entry("-t", "int");
+        entry.setValue(trackId);
+        settings[EXT3_PLAYBACK_AUDIO_TRACK_ID] = entry;
+    }
+
+    if (m_context) {
+        return processStart(m_context);
+    } else {
+        eWarning("ExtEplayer3::sendAudioSelectTrack - cannot restart, no context");
+        return -1;
+    }
 }
 
 int ExtEplayer3::sendUpdateSubtitleTracksList(){ return processSend(std::string("sl\n"));}
