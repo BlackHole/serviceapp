@@ -323,6 +323,11 @@ void ExtEplayer3::handleJsonOutput(cJSON *json)
 		{
 			v.progressive = progressive->valueint;
 		}
+		cJSON *hdr = cJSON_GetObjectItem(value, "hdr");
+		if (hdr != NULL)
+		{
+			v.hdr_type = hdr->valueint;
+		}
 		recvVideoTrackCurrent(0, v);
 	}
 	else if (!strcmp(key, "a_s"))
