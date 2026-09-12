@@ -972,9 +972,23 @@ int eServiceApp::getNumberOfTracks()
 RESULT eServiceApp::selectTrack(unsigned int i)
 {
 	eDebug("eServiceApp::selectTrack = %d", i);
+	audioStream track;
+	bool eac3_passthrough = player->audioGetTrackInfo(track, i) == 0 &&
+		(track.description == "Dolby Atmos" || track.description == "Dolby Digital +" ||
+		 track.description == "A_EAC3" || track.description == "AC3+");
 	if (player->audioSelectTrack(i) < 0)
 	{
 		return -1;
+	}
+	if (eac3_passthrough && eConfigManager::getConfigBoolValue("config.plugins.serviceapp.passthrough_fix_enable", false))
+	{
+		std::string pass = CFile::read("/proc/stb/audio/ac3");
+		if (replace_all(replace_all(pass, "\r", ""), "\n", "") == "passthrough")
+		{
+			int passthrough_delay = eConfigManager::getConfigIntValue("config.plugins.serviceapp.passthrough_fix_delay", 0);
+			m_passthrough_fix_timer->stop();
+			m_passthrough_fix_timer->start(passthrough_delay, true);
+		}
 	}
 	return 0;
 }
@@ -989,6 +1003,8 @@ RESULT eServiceApp::getTrackInfo(iAudioTrackInfo& trackInfo, unsigned int n)
 	}
 	trackInfo.m_description = track.description;
 	trackInfo.m_language = track.language_code;
+	if (track.channels > 0)
+		trackInfo.m_channels = track.channels;
 	return 0;
 }
 
@@ -1650,9 +1666,11 @@ exteplayer3_set_setting(PyObject *self, PyObject *args)
 	bool wmaSwDecoding;
 	bool downmix;
 	bool lpcmInjection;
+	bool dtsTranscoding;
+	bool truehdTranscoding;
 	int rtmpProtocol;
 
-	if (!PyArg_ParseTuple(args, "ibbbbbbbbi",
+	if (!PyArg_ParseTuple(args, "ibbbbbbbbbbi",
 				&settingId,
 				&aacSwDecoding,
 				&dtsSwDecoding,
@@ -1662,6 +1680,8 @@ exteplayer3_set_setting(PyObject *self, PyObject *args)
 				&ac3SwDecoding,
 				&eac3SwDecoding,
 				&mp3SwDecoding,
+				&dtsTranscoding,
+				&truehdTranscoding,
 				&rtmpProtocol))
 		return NULL;
 
@@ -1691,6 +1711,8 @@ exteplayer3_set_setting(PyObject *self, PyObject *args)
 		options->GetSettingMap()[EXT3_SW_DECODING_AC3].setValue(ac3SwDecoding);
 		options->GetSettingMap()[EXT3_SW_DECODING_EAC3].setValue(eac3SwDecoding);
 		options->GetSettingMap()[EXT3_SW_DECODING_DTS].setValue(dtsSwDecoding);
+		options->GetSettingMap()[EXT3_TRANSCODE_DTS_AC3].setValue(dtsTranscoding);
+		options->GetSettingMap()[EXT3_TRANSCODE_TRUEHD_AC3].setValue(truehdTranscoding);
 		options->GetSettingMap()[EXT3_SW_DECODING_WMA].setValue(wmaSwDecoding);
 		options->GetSettingMap()[EXT3_SW_DECODING_MP3].setValue(mp3SwDecoding);
 		options->GetSettingMap()[EXT3_LPCM_INJECTION].setValue(lpcmInjection);
