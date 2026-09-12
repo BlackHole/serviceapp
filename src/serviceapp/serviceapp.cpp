@@ -698,6 +698,10 @@ void eServiceApp::gotExtPlayerMessage(int message)
 			eDebug("eServiceApp::gotExtPlayerMessage - resume");
 			m_paused = false;
 			break;
+		case PlayerMessage::audioChannelsChanged:
+			eDebug("eServiceApp::gotExtPlayerMessage - audioChannelsChanged");
+			m_event(this, evUpdatedInfo);
+			break;
 		case PlayerMessage::error:
 			eDebug("eServiceApp::gotExtPlayerMessage - error");
 			m_event(this, evUser + 12);
@@ -747,6 +751,14 @@ void eServiceApp::gotExtPlayerMessage(int message)
 			m_event(this, evUpdatedInfo);
 			break;
 		}
+		case PlayerMessage::audioChannelsChanged:
+			/* recvAudioTrackCurrent() (extplayer.cpp) already refreshed the
+			 * cached mAudioStreams entry that getTrackInfo() reads from -
+			 * just tell the skin to re-poll it, same as the video property
+			 * changes above. */
+			eDebug("eServiceApp::gotExtPlayerMessage - audioChannelsChanged");
+			m_event(this, evUpdatedInfo);
+			break;
 		case PlayerMessage::subtitleAvailable:
 			eDebug("eServiceApp::gotExtPlayerMessage - subtitleAvailable");
 			if (m_selected_subtitle_track && isEmbeddedTrack(*m_selected_subtitle_track))
