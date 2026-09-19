@@ -274,7 +274,7 @@ void eServiceApp::passthroughFix()
 	if (getPlayPosition(ppos) >= 0)
 	{
 		validposition = true;
-		ppos -= 90000;
+		ppos -= 9000; /* seek back ~100ms instead of 1s for faster audio switch */
 		if (ppos < 0)
 			ppos = 0;
 	}
