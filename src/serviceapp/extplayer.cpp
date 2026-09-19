@@ -211,6 +211,18 @@ void PlayerBackend::recvMessage()
 void PlayerBackend::_updatePosition()
 {
 	pPlayer->sendUpdatePosition();
+
+	/* Piggyback on the existing position timer to periodically re-check the
+	 * current audio track's live channel count, so a format change mid-
+	 * stream (e.g. an ad break swapping 5.1 program audio for 2.0 stereo)
+	 * is actually noticed - see recvAudioTrackCurrent(). Throttled well
+	 * below the 100ms position-update rate: this only needs to catch a
+	 * change within a couple of seconds, not every tick. */
+	if (++mAudioChannelsCheckCounter >= 20)
+	{
+		mAudioChannelsCheckCounter = 0;
+		pPlayer->sendUpdateAudioTrackCurrent();
+	}
 }
 
 int PlayerBackend::start(const std::string& path, const std::map<std::string,std::string>& headers)
@@ -489,6 +501,10 @@ void PlayerBackend::gotMessage(const PlayerBackend::Message& message)
 			eDebug("PlayerBackend::gotMessage - resume");
 			gotPlayerMessage(PlayerMessage::resume);
 			break;
+		case Message::audioChannelsChanged:
+			eDebug("PlayerBackend::gotMessage - audioChannelsChanged");
+			gotPlayerMessage(PlayerMessage::audioChannelsChanged);
+			break;
 		case Message::videoSizeChanged:
 			eDebug("PlayerBackend::gotMessage - videoSizeChanged");
 			gotPlayerMessage(PlayerMessage::videoSizeChanged);
@@ -594,12 +610,35 @@ void PlayerBackend::recvAudioTrackCurrent(int status, audioStream& stream)
 	eDebug("PlayerBackend::recvAudioTrackCurrent - status = %d", status);
 	if(!status)
 	{
+		audioStream prev;
 		if (pCurrentAudio != NULL)
 		{
+			prev = *pCurrentAudio;
 			delete pCurrentAudio;
 			pCurrentAudio = NULL;
 		}
 		pCurrentAudio = new audioStream(stream);
+
+		/* The container's initial stream probe doesn't track mid-stream
+		 * channel-layout changes (e.g. an ad break swapping 5.1 program
+		 * audio for 2.0 stereo on the same track) - exteplayer3 now keeps
+		 * the underlying track's channel count live from actually decoded
+		 * frames, so a fresh "ac" query here can genuinely differ from
+		 * what mAudioStreams was populated with at open time. Keep that
+		 * cache in sync too, since getTrackInfo()/audioGetTrackInfo() read
+		 * from mAudioStreams, not from pCurrentAudio directly. */
+		if (stream.channels > 0 && prev.channels != stream.channels)
+		{
+			for (std::vector<audioStream>::iterator i(mAudioStreams.begin()); i != mAudioStreams.end(); ++i)
+			{
+				if (i->id == stream.id)
+				{
+					i->channels = stream.channels;
+					break;
+				}
+			}
+			mMessageMain.send(Message(Message::audioChannelsChanged));
+		}
 	}
 } 
 
