@@ -1,11 +1,6 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
+from json import loads
 from os.path import isfile
-import json
 
-from skin import parameters
 from Components.Console import Console
 from Components.config import config, ConfigSubsection, ConfigSelection, ConfigBoolean, ConfigSubDict, ConfigInteger, ConfigYesNo
 from Components.Label import Label
@@ -15,10 +10,11 @@ from Screens.InfoBar import InfoBar, MoviePlayer
 from Screens.MessageBox import MessageBox
 from Screens.Screen import Screen
 from Screens.Setup import Setup
+from Screens.Standby import TryQuitMainloop
 from Tools.BoundFunction import boundFunction
 from enigma import eEnv, eServiceReference
 
-from . import _, ngettext
+from . import _, _ngettext
 from . import serviceapp_client
 
 
@@ -39,6 +35,7 @@ EXTEPLAYER3_VERSION = None
 
 config.plugins.serviceapp = ConfigSubsection()
 config_serviceapp = config.plugins.serviceapp
+config_serviceapp.debug = ConfigYesNo(default=False)
 
 config_serviceapp.servicemp3 = ConfigSubsection()
 config_serviceapp.servicemp3.replace = ConfigBoolean(default=False, descriptions={False: _("original"), True: _("serviceapp")})
@@ -164,9 +161,9 @@ init_serviceapp_settings()
 
 class ServiceAppSettings(Setup):
 	def __init__(self, session):
-		self.indent = parameters.get("SetupIndent", "  ")
+		self.indent = "   "
 		self.spacer = ("---",)
-		Setup.__init__(self, session)
+		Setup.__init__(self, session, "serviceapp")
 		self.title = _("ServiceApp")
 
 	def gstplayer_options(self, gstplayer_options_cfg, config_list):
@@ -195,12 +192,6 @@ class ServiceAppSettings(Setup):
 		config_list.append((self.indent + _("Auto select stream"), serviceapp_options_cfg.autoselect_stream, _("Turn on auto-selection of streams according to set Connection speed.")))
 		config_list.append((self.indent + _("Connection speed"), serviceapp_options_cfg.connection_speed_kb, _("Set connection speed in kb/s, according to which you want to have streams auto-selected")))
 
-	def serviceapp_passthrough_options(self, config_list):
-		if SystemInfo["Vu_EAC3_fix"] and config.av.downmix_ac3.value == "passthrough":
-			config_list.append((_("Enable AC3+ passthrough fix"), config_serviceapp.passthrough_fix_enable, _("Enables AC3+ passthrough fix for Vu+ Ultimo4K / Duo4KSE.")))
-			if config_serviceapp.passthrough_fix_enable.value:
-				config_list.append((_("AC3+ Passthrough fix delay"), config_serviceapp.passthrough_fix_delay, _("Select the delay that will be used for AC3+ Passthrough fix.")))
-
 	def player_options(self, player_type, service_type, config_list):
 		player_cfg = getattr(config_serviceapp, player_type)[service_type]
 		serviceapp_cfg = config_serviceapp.options[service_type]
@@ -220,17 +211,18 @@ class ServiceAppSettings(Setup):
 		if config_serviceapp.servicemp3.replace.value:
 			config_list.append((_("Player"), config_serviceapp.servicemp3.player, _("Select the player which will be used in serviceapp for Enigma2 playback.")))
 			config_list.append(self.spacer)
-			config_list.append((_("ServiceMp3 (%s)" % str(serviceapp_client.ID_SERVICEMP3)),))
+			config_list.append((_("ServiceMp3 (%s)") % str(serviceapp_client.ID_SERVICEMP3),))
 			if config_serviceapp.servicemp3.player.value == "gstplayer":
 				self.player_options("gstplayer", "servicemp3", config_list)
 			elif config_serviceapp.servicemp3.player.value == "exteplayer3":
 				self.player_options("exteplayer3", "servicemp3", config_list)
 		config_list.append(self.spacer)
-		config_list.append((_("ServiceGstPlayer (%s)" % str(serviceapp_client.ID_SERVICEGSTPLAYER)),))
+		config_list.append((_("ServiceGstPlayer (%s)") % str(serviceapp_client.ID_SERVICEGSTPLAYER),))
 		self.player_options("gstplayer", "servicegstplayer", config_list)
 		config_list.append(self.spacer)
-		config_list.append((_("ServiceExtEplayer3 (%s)" % str(serviceapp_client.ID_SERVICEEXTEPLAYER3)),))
+		config_list.append((_("ServiceExtEplayer3 (%s)") % str(serviceapp_client.ID_SERVICEEXTEPLAYER3),))
 		self.player_options("exteplayer3", "serviceexteplayer3", config_list)
+		config_list.append((_("Debug"), config_serviceapp.debug, _("Turn on debug messages")))
 		self["config"].list = config_list
 
 	def keySave(self):
@@ -264,15 +256,14 @@ class ServiceAppDetectPlayers(Screen):
 	skin = """
 		<screen position="center,center" size="500,340" title="ServiceApp - player check">
 			<widget name="text" position="10,10" size="490,325" font="Regular;28" halign="center" valign="center" />
-		</screen>
-				"""
+		</screen>"""
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		self["text"] = Label()
 		self.players_iter = iter(
 			[
-				("gstplayer_gst-1.0", _("Detecting gstreamer player ..."), self.detect_gstplayer),
+				("gstplayer2", _("Detecting gstreamer player ..."), self.detect_gstplayer),
 				("exteplayer3", _("Detecting exteplayer3 player ..."), self.detect_exteplayer3),
 			]
 		)
@@ -295,7 +286,7 @@ class ServiceAppDetectPlayers(Screen):
 		jsondata = None
 		for line in data.splitlines():
 			try:
-				jsondata = json.loads(line)
+				jsondata = loads(line)
 				break
 			except ValueError:
 				pass
@@ -331,10 +322,8 @@ class ServiceAppDetectPlayers(Screen):
 
 
 def main(session, **kwargs):
-
 	def restart_enigma2(restart=False):
 		if restart:
-			from Screens.Standby import TryQuitMainloop
 			session.open(TryQuitMainloop, 3)
 
 	def open_serviceapp_settings(callback=None):
