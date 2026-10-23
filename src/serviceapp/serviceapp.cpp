@@ -4,6 +4,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <sstream>
+#include <unistd.h>
 
 #include <lib/base/cfile.h>
 #include <lib/base/eenv.h>
@@ -283,8 +284,19 @@ eServiceApp::~eServiceApp() {
 
 
 void eServiceApp::passthroughFix() {
-	eDebug("[ServiceApp] Setting 'passthrough' to force correct operation");
-	CFile::writeStr("/proc/stb/audio/ac3", "passthrough");
+	/* TEST BUILD: create these files in /tmp to skip individual steps
+	 *   /tmp/sa_nopoke   skip the /proc/stb/audio/ac3 write
+	 *   /tmp/sa_noseek   skip the seekTo() (OUTPUT_CLEAR + container seek)
+	 *   /tmp/sa_noclear  skip the final outputClear()
+	 * No files = the original behaviour. */
+	const bool doPoke = access("/tmp/sa_nopoke", F_OK) != 0;
+	const bool doSeek = access("/tmp/sa_noseek", F_OK) != 0;
+	const bool doClear = access("/tmp/sa_noclear", F_OK) != 0;
+	eDebug("[ServiceApp] passthroughFix: poke=%d seek=%d clear=%d", doPoke, doSeek, doClear);
+	if (doPoke) {
+		eDebug("[ServiceApp] Setting 'passthrough' to force correct operation");
+		CFile::writeStr("/proc/stb/audio/ac3", "passthrough");
+	}
 	bool validposition = false;
 	pts_t ppos = 0;
 	if (getPlayPosition(ppos) >= 0) {
@@ -293,14 +305,14 @@ void eServiceApp::passthroughFix() {
 		if (ppos < 0)
 			ppos = 0;
 	}
-	if (validposition) {
+	if (validposition && doSeek) {
 		/* flush */
 		seekTo(ppos);
 	}
 	/* Flush the exteplayer3 output without seeking the HLS/container stream.
 	 * The legacy seekTo() workaround performs OUTPUT_CLEAR followed by an
 	 * actual container seek, which causes a several-second interruption. */
-	if (player)
+	if (player && doClear)
 		player->outputClear();
 }
 
