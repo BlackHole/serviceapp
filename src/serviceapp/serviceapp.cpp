@@ -288,11 +288,13 @@ void eServiceApp::passthroughFix() {
 	 *   /tmp/sa_nopoke   skip the /proc/stb/audio/ac3 write
 	 *   /tmp/sa_noseek   skip the seekTo() (OUTPUT_CLEAR + container seek)
 	 *   /tmp/sa_noclear  skip the final outputClear()
+	 *   /tmp/sa_x2seek   do the seekTo() twice in a row (double flush)
 	 * No files = the original behaviour. */
 	const bool doPoke = access("/tmp/sa_nopoke", F_OK) != 0;
 	const bool doSeek = access("/tmp/sa_noseek", F_OK) != 0;
 	const bool doClear = access("/tmp/sa_noclear", F_OK) != 0;
-	eDebug("[ServiceApp] passthroughFix: poke=%d seek=%d clear=%d", doPoke, doSeek, doClear);
+	const bool doubleSeek = access("/tmp/sa_x2seek", F_OK) == 0;
+	eDebug("[ServiceApp] passthroughFix: poke=%d seek=%d clear=%d x2seek=%d", doPoke, doSeek, doClear, doubleSeek);
 	if (doPoke) {
 		eDebug("[ServiceApp] Setting 'passthrough' to force correct operation");
 		CFile::writeStr("/proc/stb/audio/ac3", "passthrough");
@@ -308,6 +310,8 @@ void eServiceApp::passthroughFix() {
 	if (validposition && doSeek) {
 		/* flush */
 		seekTo(ppos);
+		if (doubleSeek)
+			seekTo(ppos);
 	}
 	/* Flush the exteplayer3 output without seeking the HLS/container stream.
 	 * The legacy seekTo() workaround performs OUTPUT_CLEAR followed by an
