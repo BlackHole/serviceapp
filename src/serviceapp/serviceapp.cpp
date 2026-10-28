@@ -4,10 +4,12 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <sstream>
+#include <unistd.h>
 
 #include <lib/base/cfile.h>
 #include <lib/base/eenv.h>
 #include <lib/base/esimpleconfig.h>
+#include <lib/base/nconfig.h>
 #include <lib/base/init.h>
 #include <lib/base/init_num.h>
 #include <lib/base/nconfig.h>
@@ -283,8 +285,21 @@ eServiceApp::~eServiceApp() {
 
 
 void eServiceApp::passthroughFix() {
-	eDebug("[ServiceApp] Setting 'passthrough' to force correct operation");
-	CFile::writeStr("/proc/stb/audio/ac3", "passthrough");
+	/* TEST BUILD: create these files in /tmp to skip individual steps
+	 *   /tmp/sa_nopoke   skip the /proc/stb/audio/ac3 write
+	 *   /tmp/sa_noseek   skip the seekTo() (OUTPUT_CLEAR + container seek)
+	 *   /tmp/sa_noclear  skip the final outputClear()
+	 *   /tmp/sa_x2seek   do the seekTo() twice in a row (double flush)
+	 * No files = the original behaviour. */
+	const bool doPoke = access("/tmp/sa_nopoke", F_OK) != 0;
+	const bool doSeek = access("/tmp/sa_noseek", F_OK) != 0;
+	const bool doClear = access("/tmp/sa_noclear", F_OK) != 0;
+	const bool doubleSeek = access("/tmp/sa_x2seek", F_OK) == 0;
+	eDebug("[ServiceApp] passthroughFix: poke=%d seek=%d clear=%d x2seek=%d", doPoke, doSeek, doClear, doubleSeek);
+	if (doPoke) {
+		eDebug("[ServiceApp] Setting 'passthrough' to force correct operation");
+		CFile::writeStr("/proc/stb/audio/ac3", "passthrough");
+	}
 	bool validposition = false;
 	pts_t ppos = 0;
 	if (getPlayPosition(ppos) >= 0) {
@@ -293,14 +308,16 @@ void eServiceApp::passthroughFix() {
 		if (ppos < 0)
 			ppos = 0;
 	}
-	if (validposition) {
+	if (validposition && doSeek) {
 		/* flush */
 		seekTo(ppos);
+		if (doubleSeek)
+			seekTo(ppos);
 	}
 	/* Flush the exteplayer3 output without seeking the HLS/container stream.
 	 * The legacy seekTo() workaround performs OUTPUT_CLEAR followed by an
 	 * actual container seek, which causes a several-second interruption. */
-	if (player)
+	if (player && doClear)
 		player->outputClear();
 }
 
@@ -574,6 +591,8 @@ void eServiceApp::signalEventUpdatedInfo() {
 	if (m_debug)
 		eDebug("eServiceApp::signalEventUpdatedInfo");
 	m_event(this, evUpdatedInfo);
+	// the player knows by now whether the stream has a length
+	m_event(this, evSeekableStatusChanged);
 	bool is_passthrough_fix_enabled = eConfigManager::getConfigBoolValue("config.plugins.serviceapp.passthrough_fix_enable", false);
 	if (is_passthrough_fix_enabled)
 	{
@@ -700,6 +719,12 @@ void eServiceApp::gotExtPlayerMessage(int message) {
 			m_event(this, evUpdatedInfo);
 			break;
 		}
+		case PlayerMessage::windStart:
+			m_event(this, evSOF);
+			break;
+		case PlayerMessage::windEnd:
+			m_event(this, evEOF);
+			break;
 		case PlayerMessage::subtitleAvailable:
 			if (m_debug)
 				eDebug("eServiceApp::gotExtPlayerMessage - subtitleAvailable");
@@ -822,7 +847,9 @@ RESULT eServiceApp::setSlowMotion(int ratio) {
 
 RESULT eServiceApp::setFastForward(int ratio) {
 	eDebug("eServiceApp::setFastForward - ratio = %d", ratio);
-	return -1;
+	if (ratio == 0 || ratio == 1)
+		return player->resume();
+	return player->fastForward(ratio);
 }
 
 
@@ -840,7 +867,10 @@ RESULT eServiceApp::getLength(pts_t& pts) {
 RESULT eServiceApp::seekTo(pts_t to) {
 	eDebug("eServiceApp::seekTo - position = %lld", to);
 	pts_t length;
-	if (to < 0) {
+	if (to == -1 && player->canWind() && getLength(length) == 0 && length > 90000) {
+		/* winding reached the end: a second before it */
+		to = length - 90000;
+	} else if (to < 0) {
 		to = 0;
 	} else if (getLength(length) < 0) {
 		eWarning("eServiceApp::seekTo - cannot get length");
@@ -887,7 +917,17 @@ RESULT eServiceApp::setTrickmode(int trick) {
 RESULT eServiceApp::isCurrentlySeekable() {
 	if (m_debug)
 		eDebug("eServiceApp::isCurrentlySeekable");
-	/* just assume that seeking and fast/slow winding are possible */
+	/* a player that winds itself does it at every speed and backwards (bit 4)
+	 * unless the user wants jumps; for the others just assume that seeking and
+	 * fast/slow winding are possible */
+	/* a live network stream has no length, a VOD stream has one;
+	 * -2: the player runs but has no length */
+	int lengthMs;
+	if (m_ref.path.find("://") != std::string::npos && player->getLength(lengthMs) == -2)
+		return 0;
+	pts_t length;
+	if (player->canWind() && getLength(length) == 0 && length > 0)
+		return eConfigManager::getConfigBoolValue("config.seek.withjumps", true) ? 3 : 7;
 	return 3;
 }
 
