@@ -4,7 +4,6 @@ from os.path import isfile
 from Components.Console import Console
 from Components.config import config, ConfigSubsection, ConfigSelection, ConfigBoolean, ConfigSubDict, ConfigInteger, ConfigYesNo
 from Components.Label import Label
-from Components.SystemInfo import SystemInfo
 from Plugins.Plugin import PluginDescriptor
 from Screens.InfoBar import InfoBar, MoviePlayer
 from Screens.MessageBox import MessageBox
